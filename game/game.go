@@ -12,25 +12,59 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
-const tileSize = 16
+const (
+	tileSize          = 16
+	playerCollisionRX = tileSize / 2
+	playerCollisionRY = 2.5
+)
 
-// mapGrid is a 9x7 tile map; all cells use tile index 182.
-// TODO it is temporary
-var mapGrid = func() [][]int {
-	const (
-		mapCols = 9
-		mapRows = 7
-		tile    = 182
-	)
-	grid := make([][]int, mapRows)
-	for r := range grid {
-		grid[r] = make([]int, mapCols)
-		for c := range grid[r] {
-			grid[r][c] = tile
-		}
-	}
-	return grid
-}()
+const none = -1
+
+// TODO: temporary hardcoded maps.
+var floorGrid = [][]int{
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+	{none, 164, 165, 165, 165, 165, 165, 165, none},
+	{none, 181, 182, 182, 182, 182, 182, 182, none},
+	{none, 181, 182, 182, 182, 182, 182, 182, none},
+	{none, 181, 182, 182, 182, 182, 182, 182, none},
+	{none, 181, 182, 182, 182, 182, 182, 182, none},
+	{none, none, none, none, none, none, none, none, none},
+}
+
+var wallsGrid = [][]int{
+	{28, 324, 324, 324, 324, 324, 324, 324, 30},
+	{7, 348, 348, 348, 348, 348, 348, 348, 8},
+	{7, none, none, none, none, none, none, none, 8},
+	{7, none, none, none, none, none, none, none, 8},
+	{7, none, none, none, none, none, none, none, 8},
+	{7, none, none, none, none, none, none, none, 8},
+	{7, none, none, none, none, none, none, none, 8},
+	{62, 63, 63, 63, 63, 63, 63, 63, 64},
+}
+
+var itemsGrid = [][]int{
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, 610, 611, none, none, none, none, none},
+	{none, none, 626, 627, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+	{none, none, none, none, none, none, none, none, none},
+}
+
+// CollFree=0, CollBlocked=1, see collision.go for partial types.
+var collisionGrid = [][]CollisionType{
+	{1, 1, 1, 1, 1, 1, 1, 1, 1},
+	{1, 1, 1, 1, 1, 1, 1, 1, 1},
+	{1, 0, 0, 0, 0, 0, 0, 0, 1},
+	{1, 0, 5, 4, 0, 0, 0, 0, 1},
+	{1, 0, 3, 2, 0, 0, 0, 0, 1},
+	{1, 0, 0, 0, 0, 0, 0, 0, 1},
+	{1, 0, 0, 0, 0, 0, 0, 0, 1},
+	{1, 1, 1, 1, 1, 1, 1, 1, 1},
+}
 
 type Game struct {
 	screenWidth  int
@@ -45,6 +79,10 @@ func NewGame(screenWidth, screenHeight int) *Game {
 	if err != nil {
 		log.Fatal(err)
 	}
+	interiorsTS, err := tileset.New(assets.InteriorsSheet, tileSize, tileSize)
+	if err != nil {
+		log.Fatal(err)
+	}
 	bobIdleTS, err := tileset.New(assets.BobIdle, tileSize, tileSize*2)
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +92,7 @@ func NewGame(screenWidth, screenHeight int) *Game {
 		log.Fatal(err)
 	}
 
-	w := NewWorld(roomTS, mapGrid)
+	w := NewWorld(roomTS, floorGrid, wallsGrid, interiorsTS, itemsGrid, collisionGrid)
 
 	cx, cy := w.CellCenter(5, 5)
 	return &Game{
@@ -67,7 +105,21 @@ func NewGame(screenWidth, screenHeight int) *Game {
 }
 
 func (g *Game) Update() error {
+	oldX, oldY := g.player.X, g.player.Y
 	g.player.Update()
+
+	if g.world.EllipseCollidesAt(g.player.X, g.player.Y, playerCollisionRX, playerCollisionRY) {
+		// Try sliding along X axis.
+		if !g.world.EllipseCollidesAt(g.player.X, oldY, playerCollisionRX, playerCollisionRY) {
+			g.player.Y = oldY
+		} else if !g.world.EllipseCollidesAt(oldX, g.player.Y, playerCollisionRX, playerCollisionRY) {
+			// Try sliding along Y axis.
+			g.player.X = oldX
+		} else {
+			g.player.X, g.player.Y = oldX, oldY
+		}
+	}
+
 	g.camera.Follow(g.player.X, g.player.Y)
 	return nil
 }
