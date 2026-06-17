@@ -63,13 +63,12 @@ var collisionGrid = [][]CollisionType{
 	{1, 0, 3, 2, 0, 0, 0, 0, 1},
 	{1, 0, 0, 0, 0, 0, 0, 0, 1},
 	{1, 0, 0, 0, 0, 0, 0, 0, 1},
-	{1, 1, 1, 1, 1, 1, 1, 1, 1},
+	{1, 7, 7, 7, 7, 7, 7, 7, 1},
 }
 
 type Game struct {
 	screenWidth  int
 	screenHeight int
-	player       *Player
 	camera       *Camera
 	world        *World
 }
@@ -92,49 +91,35 @@ func NewGame(screenWidth, screenHeight int) *Game {
 		log.Fatal(err)
 	}
 
-	w := NewWorld(roomTS, floorGrid, wallsGrid, interiorsTS, itemsGrid, collisionGrid)
+	player := NewPlayer(bobIdleTS, bobRunTS, playerCollisionRX, playerCollisionRY)
+	w := NewWorld(roomTS, floorGrid, wallsGrid, interiorsTS, itemsGrid, collisionGrid, player)
+	player.SetPosition(w.CellCenter(5, 5))
 
-	cx, cy := w.CellCenter(5, 5)
 	return &Game{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
-		player:       NewPlayer(bobIdleTS, bobRunTS, cx, cy),
 		camera:       NewCamera(),
 		world:        w,
 	}
 }
 
 func (g *Game) Update() error {
-	oldX, oldY := g.player.X, g.player.Y
-	g.player.Update()
-
-	if g.world.EllipseCollidesAt(g.player.X, g.player.Y, playerCollisionRX, playerCollisionRY) {
-		// Try sliding along X axis.
-		if !g.world.EllipseCollidesAt(g.player.X, oldY, playerCollisionRX, playerCollisionRY) {
-			g.player.Y = oldY
-		} else if !g.world.EllipseCollidesAt(oldX, g.player.Y, playerCollisionRX, playerCollisionRY) {
-			// Try sliding along Y axis.
-			g.player.X = oldX
-		} else {
-			g.player.X, g.player.Y = oldX, oldY
-		}
-	}
-
-	g.camera.Follow(g.player.X, g.player.Y)
+	g.world.Update()
+	g.camera.Follow(g.world.Player().X, g.world.Player().Y)
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	g.world.Draw(screen, g.camera.X, g.camera.Y, g.screenWidth, g.screenHeight)
-	g.player.Draw(screen, g.camera, g.screenWidth, g.screenHeight)
-	g.drawWorldAxes(screen)
+	g.world.Draw(screen, g.camera, g.screenWidth, g.screenHeight)
+	//g.drawWorldAxes(screen)
 
-	playerSX, playerSY := g.camera.WorldToScreen(g.player.X, g.player.Y, g.screenWidth, g.screenHeight)
+	p := g.world.Player()
+	sx, sy := g.camera.WorldToScreen(p.X, p.Y, g.screenWidth, g.screenHeight)
 	info := fmt.Sprintf(
 		"World:  player (%.1f, %.1f)\nCamera: center (%.1f, %.1f)\nScreen: player (%.1f, %.1f)",
-		g.player.X, g.player.Y,
+		p.X, p.Y,
 		g.camera.X, g.camera.Y,
-		playerSX, playerSY,
+		sx, sy,
 	)
 	ebitenutil.DebugPrint(screen, info)
 }

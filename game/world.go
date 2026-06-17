@@ -8,7 +8,7 @@ type tileProvider interface {
 	TileH() int
 }
 
-// World holds the tile map and renders it.
+// World holds the tile map, entities, and renders them.
 type World struct {
 	tiles     tileProvider
 	floor     [][]int // floor[row][col] = tile index, -1 = empty
@@ -18,9 +18,10 @@ type World struct {
 	collision [][]CollisionType // collision[row][col]
 	cols      int
 	rows      int
+	player    *Player
 }
 
-func NewWorld(ts tileProvider, floor, walls [][]int, itemTiles tileProvider, items [][]int, collision [][]CollisionType) *World {
+func NewWorld(ts tileProvider, floor, walls [][]int, itemTiles tileProvider, items [][]int, collision [][]CollisionType, player *Player) *World {
 	rows := len(floor)
 	cols := 0
 	if rows > 0 {
@@ -35,6 +36,28 @@ func NewWorld(ts tileProvider, floor, walls [][]int, itemTiles tileProvider, ite
 		collision: collision,
 		cols:      cols,
 		rows:      rows,
+		player:    player,
+	}
+}
+
+func (w *World) Player() *Player { return w.player }
+
+func (w *World) Update() {
+	oldX, oldY := w.player.X, w.player.Y
+	w.player.Update()
+
+	rx, ry := w.player.CollisionRX, w.player.CollisionRY
+	if w.EllipseCollidesAt(w.player.X, w.player.Y, rx, ry) {
+		// Try sliding along X axis.
+		switch {
+		case !w.EllipseCollidesAt(w.player.X, oldY, rx, ry):
+			w.player.Y = oldY
+		case !w.EllipseCollidesAt(oldX, w.player.Y, rx, ry):
+			// Try sliding along Y axis.
+			w.player.X = oldX
+		default:
+			w.player.X, w.player.Y = oldX, oldY
+		}
 	}
 }
 
@@ -108,30 +131,51 @@ func (w *World) CellCenter(col, row int) (float64, float64) {
 	return float64(col)*tw + tw/2, float64(row)*th + th/2
 }
 
-// Draw renders layers in order: floor, walls, items.
-func (w *World) Draw(screen *ebiten.Image, cameraX, cameraY float64, screenW, screenH int) {
-	w.drawLayer(screen, w.tiles, w.floor, cameraX, cameraY, screenW, screenH)
-	w.drawLayer(screen, w.tiles, w.walls, cameraX, cameraY, screenW, screenH)
-	w.drawLayer(screen, w.itemTiles, w.items, cameraX, cameraY, screenW, screenH)
+// Draw renders rows top-to-bottom. The player is inserted when their pivot Y
+// falls within the window [tilePivotY-th, tilePivotY) of the current row.
+func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
+	for row := range w.floor {
+		w.drawRow(screen, w.tiles, w.floor, row, cam, screenW, screenH)
+	}
+
+	th := float64(w.tiles.TileH())
+	playerDrawn := false
+
+	for row := range w.walls {
+		tilePivotY := float64(row)*th + th/2
+
+		if !playerDrawn && w.player.Y >= tilePivotY-th && w.player.Y < tilePivotY {
+			w.player.Draw(screen, cam, screenW, screenH)
+			playerDrawn = true
+		}
+
+		w.drawRow(screen, w.tiles, w.walls, row, cam, screenW, screenH)
+		w.drawRow(screen, w.itemTiles, w.items, row, cam, screenW, screenH)
+	}
+
+	if !playerDrawn {
+		w.player.Draw(screen, cam, screenW, screenH)
+	}
 }
 
-func (w *World) drawLayer(screen *ebiten.Image, tiles tileProvider, layer [][]int, cameraX, cameraY float64, screenW, screenH int) {
+func (w *World) drawRow(screen *ebiten.Image, tiles tileProvider, layer [][]int, row int, cam *Camera, screenW, screenH int) {
+	if row >= len(layer) {
+		return
+	}
 	tw := float64(tiles.TileW())
 	th := float64(tiles.TileH())
 	hw, hh := float64(screenW)/2, float64(screenH)/2
 
-	for row, rowTiles := range layer {
-		for col, tileIdx := range rowTiles {
-			if tileIdx == -1 {
-				continue
-			}
-			sx := (float64(col)*tw-cameraX)*Scale + hw
-			sy := (float64(row)*th-cameraY)*Scale + hh
-
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Scale(Scale, Scale)
-			op.GeoM.Translate(sx, sy)
-			screen.DrawImage(tiles.Tile(tileIdx), op)
+	for col, tileIdx := range layer[row] {
+		if tileIdx == -1 {
+			continue
 		}
+		sx := (float64(col)*tw-cam.X)*Scale + hw
+		sy := (float64(row)*th-cam.Y)*Scale + hh
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(Scale, Scale)
+		op.GeoM.Translate(sx, sy)
+		screen.DrawImage(tiles.Tile(tileIdx), op)
 	}
 }

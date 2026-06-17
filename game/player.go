@@ -22,17 +22,30 @@ const (
 )
 
 type Player struct {
-	X, Y   float64 // world position = bottom-center of sprite (pivot)
-	dir    direction
-	moving bool
-	frame  int
-	tick   int
-	idle   tileProvider // 4 frames: one per direction, each 16x32
-	run    tileProvider // 24 frames: 6 per direction, each 16x32
+	X, Y        float64 // world position = bottom-center of sprite (pivot)
+	CollisionRX float64
+	CollisionRY float64
+	dir         direction
+	moving      bool
+	frame       int
+	tick        int
+	idle        tileProvider // 4 frames: one per direction, each 16x32
+	run         tileProvider // 24 frames: 6 per direction, each 16x32
 }
 
-func NewPlayer(idle, run tileProvider, x, y float64) *Player {
-	return &Player{idle: idle, run: run, X: x, Y: y, dir: dirDown}
+func NewPlayer(idle, run tileProvider, collisionRX, collisionRY float64) *Player {
+	return &Player{
+		idle:        idle,
+		run:         run,
+		CollisionRX: collisionRX,
+		CollisionRY: collisionRY,
+		dir:         dirDown,
+	}
+}
+
+func (p *Player) SetPosition(x, y float64) {
+	p.X = x
+	p.Y = y
 }
 
 func (p *Player) Update() {
