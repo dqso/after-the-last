@@ -1,0 +1,95 @@
+<tiles>
+    <floors tileset="0x0001">
+        <floor name="Terracotta Tile">
+            <tile id="114" type="clear" />
+            <tile id="96"  type="left|top" />
+            <tile id="97"  type="top" />
+            <tile id="113" type="left" />
+        </floor>
+        <floor name="Cream Tile">
+            <tile id="148" type="clear" />
+            <tile id="130" type="left|top" />
+            <tile id="131" type="top" />
+            <tile id="147" type="left" />
+        </floor>
+        <floor name="Teal Tile">
+            <tile id="182" type="clear" />
+            <tile id="164" type="left|top" />
+            <tile id="165" type="top" />
+            <tile id="181" type="left" />
+        </floor>
+        <floor name="Herringbone">
+            <tile id="250" type="clear" />
+            <tile id="232" type="left|top" />
+            <tile id="233" type="top" />
+            <tile id="249" type="left" />
+        </floor>
+        <floor name="Plain Grey Surface">
+            <tile id="216" type="clear" />
+            <tile id="198" type="left|top" />
+            <tile id="199" type="top" />
+            <tile id="215" type="left" />
+        </floor>
+        <floor name="Grey Vertical Planks">
+            <tile id="117" type="clear" />
+            <tile id="99" type="left|top" />
+            <tile id="100" type="top" />
+            <tile id="116" type="left" />
+        </floor>
+        <floor name="Grey Fine Crosshatch">
+            <tile id="151" type="clear" />
+            <tile id="133" type="left|top" />
+            <tile id="134" type="top" />
+            <tile id="150" type="left" />
+        </floor>
+        <floor name="Grey Grid Tile">
+            <tile id="185" type="clear" />
+            <tile id="167" type="left|top" />
+            <tile id="168" type="top" />
+            <tile id="184" type="left" />
+        </floor>
+    </floors>
+    <walls tileset="0x0001">
+        <wall name="common">
+            <tile id="28" type="corner_left_top" />
+            <tile id="30" type="corner_right_top" />
+            <tile id="7" type="left" />
+            <tile id="8" type="right" />
+            <tile id="62" type="corner_left_bottom" />
+            <tile id="63" type="bottom" />
+            <tile id="64" type="corner_right_bottom" />
+        </wall>
+        <wall name="Terracotta Wall">
+            <tile id="86"  type="top" />
+            <tile id="103" type="bottom" />
+        </wall>
+        <wall name="Mustard Wall">
+            <tile id="120" type="top" />
+            <tile id="137" type="bottom" />
+        </wall>
+        <wall name="Mint Wall">
+            <tile id="154" type="top" />
+            <tile id="171" type="bottom" />
+        </wall>
+        <wall name="Oak Wood Panel Wall">
+            <tile id="188" type="top" />
+            <tile id="205" type="bottom" />
+        </wall>
+        <wall name="Taupe Wood Panel Wall">
+            <tile id="222" type="top" />
+            <tile id="239" type="bottom" />
+        </wall>
+        <wall name="Mahogany Wood Panel Wall">
+            <tile id="256" type="top" />
+            <tile id="273" type="bottom" />
+        </wall>
+        <wall name="Slate Blue-Grey Wall">
+            <tile id="290" type="top" />
+            <tile id="307" type="bottom" />
+        </wall>
+        <wall name="Olive-Grey Wall">
+            <tile id="324" type="top" />
+            <tile id="341" type="bottom" />
+        </wall>
+    </walls>
+</tiles>

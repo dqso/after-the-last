@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 
+	"github.com/dqso/after-the-last/tileset"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -29,14 +30,12 @@ type Player struct {
 	moving      bool
 	frame       int
 	tick        int
-	idle        tileProvider // 4 frames: one per direction, each 16x32
-	run         tileProvider // 24 frames: 6 per direction, each 16x32
+	tiles       tilesetListProvider
 }
 
-func NewPlayer(idle, run tileProvider, collisionRX, collisionRY float64) *Player {
+func NewPlayer(tiles tilesetListProvider, collisionRX, collisionRY float64) *Player {
 	return &Player{
-		idle:        idle,
-		run:         run,
+		tiles:       tiles,
 		CollisionRX: collisionRX,
 		CollisionRY: collisionRY,
 		dir:         dirDown,
@@ -97,22 +96,21 @@ func (p *Player) Update() {
 }
 
 func (p *Player) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
-	var ts tileProvider
 	var tileIndex int
 	if p.moving {
-		ts = p.run
 		tileIndex = int(p.dir)*runFrames + p.frame
+		tileIndex += tileset.BobRunSheet << tileset.SheetShift
 	} else {
-		ts = p.idle
 		tileIndex = int(p.dir)
+		tileIndex += tileset.BobIdleSheet << tileset.SheetShift
 	}
 
-	tile := ts.Tile(tileIndex)
+	tile := p.tiles.Tile(tileIndex)
 	sx, sy := cam.WorldToScreen(p.X, p.Y, screenW, screenH)
 
 	// Pivot is bottom-center: top-left offset = (-tileW/2, -tileH) in screen pixels.
-	tw := float64(ts.TileW())
-	th := float64(ts.TileH())
+	tw := float64(p.tiles.TileW())
+	th := float64(p.tiles.TileH())
 	drawX := sx - tw*Scale/2
 	drawY := sy - th*Scale
 

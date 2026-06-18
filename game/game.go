@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/dqso/after-the-last/assets"
+	"github.com/dqso/after-the-last/random"
 	"github.com/dqso/after-the-last/tileset"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -18,54 +21,6 @@ const (
 	playerCollisionRY = 2.5
 )
 
-const none = -1
-
-// TODO: temporary hardcoded maps.
-var floorGrid = [][]int{
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-	{none, 164, 165, 165, 165, 165, 165, 165, none},
-	{none, 181, 182, 182, 182, 182, 182, 182, none},
-	{none, 181, 182, 182, 182, 182, 182, 182, none},
-	{none, 181, 182, 182, 182, 182, 182, 182, none},
-	{none, 181, 182, 182, 182, 182, 182, 182, none},
-	{none, none, none, none, none, none, none, none, none},
-}
-
-var wallsGrid = [][]int{
-	{28, 324, 324, 324, 324, 324, 324, 324, 30},
-	{7, 348, 348, 348, 348, 348, 348, 348, 8},
-	{7, none, none, none, none, none, none, none, 8},
-	{7, none, none, none, none, none, none, none, 8},
-	{7, none, none, none, none, none, none, none, 8},
-	{7, none, none, none, none, none, none, none, 8},
-	{7, none, none, none, none, none, none, none, 8},
-	{62, 63, 63, 63, 63, 63, 63, 63, 64},
-}
-
-var itemsGrid = [][]int{
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, 610, 611, none, none, none, none, none},
-	{none, none, 626, 627, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-	{none, none, none, none, none, none, none, none, none},
-}
-
-// CollFree=0, CollBlocked=1, see collision.go for partial types.
-var collisionGrid = [][]CollisionType{
-	{1, 1, 1, 1, 1, 1, 1, 1, 1},
-	{1, 1, 1, 1, 1, 1, 1, 1, 1},
-	{1, 0, 0, 0, 0, 0, 0, 0, 1},
-	{1, 0, 5, 4, 0, 0, 0, 0, 1},
-	{1, 0, 3, 2, 0, 0, 0, 0, 1},
-	{1, 0, 0, 0, 0, 0, 0, 0, 1},
-	{1, 0, 0, 0, 0, 0, 0, 0, 1},
-	{1, 7, 7, 7, 7, 7, 7, 7, 1},
-}
-
 type Game struct {
 	screenWidth  int
 	screenHeight int
@@ -74,26 +29,61 @@ type Game struct {
 }
 
 func NewGame(screenWidth, screenHeight int) *Game {
-	roomTS, err := tileset.New(assets.RoomBuilderSheet, tileSize, tileSize)
+	tilesetList := tileset.NewTileSetList()
+	roomTS, err := tileset.NewTileSet(assets.RoomBuilderSheet, tileSize, tileSize)
 	if err != nil {
 		log.Fatal(err)
 	}
-	interiorsTS, err := tileset.New(assets.InteriorsSheet, tileSize, tileSize)
+	if err := tilesetList.Register(tileset.RoomBuilderSheet, roomTS); err != nil {
+		log.Fatal(err)
+	}
+	interiorsTS, err := tileset.NewTileSet(assets.InteriorsSheet, tileSize, tileSize)
 	if err != nil {
 		log.Fatal(err)
 	}
-	bobIdleTS, err := tileset.New(assets.BobIdle, tileSize, tileSize*2)
+	if err := tilesetList.Register(tileset.InteriorsSheet, interiorsTS); err != nil {
+		log.Fatal(err)
+	}
+	extraTS, err := tileset.NewTileSet(assets.ExtraSheet, tileSize, tileSize)
 	if err != nil {
 		log.Fatal(err)
 	}
-	bobRunTS, err := tileset.New(assets.BobRun, tileSize, tileSize*2)
+	if err := tilesetList.Register(tileset.ExtraSheet, extraTS); err != nil {
+		log.Fatal(err)
+	}
+
+	tilesetCharacterList := tileset.NewTileSetList()
+	bobIdleTS, err := tileset.NewTileSet(assets.BobIdle, tileSize, tileSize*2)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := tilesetCharacterList.Register(tileset.BobIdleSheet, bobIdleTS); err != nil {
+		log.Fatal(err)
+	}
+	bobRunTS, err := tileset.NewTileSet(assets.BobRun, tileSize, tileSize*2)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := tilesetCharacterList.Register(tileset.BobRunSheet, bobRunTS); err != nil {
+		log.Fatal(err)
+	}
+
+	generator, err := random.NewGenerator(assets.TilesXML)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	player := NewPlayer(bobIdleTS, bobRunTS, playerCollisionRX, playerCollisionRY)
-	w := NewWorld(roomTS, floorGrid, wallsGrid, interiorsTS, itemsGrid, collisionGrid, player)
-	player.SetPosition(w.CellCenter(5, 5))
+	player := NewPlayer(tilesetCharacterList, playerCollisionRX, playerCollisionRY)
+
+	//floorGrid, wallsGrid, itemsGrid, collisionGrid := generator.GenerateV0()
+	floorGrid, wallsGrid, itemsGrid, collisionGrid := generator.GenerateV1(time.Now().UnixNano())
+	w := NewWorld(tilesetList, floorGrid, wallsGrid, itemsGrid, collisionGrid, player)
+
+	col, row, ok := w.FindFreeCell(rand.New(rand.NewSource(0)))
+	if !ok {
+		log.Fatal("no free cell found in world")
+	}
+	player.SetPosition(w.CellCenter(col, row))
 
 	return &Game{
 		screenWidth:  screenWidth,

@@ -1,27 +1,31 @@
 package game
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"math/rand"
 
-type tileProvider interface {
-	Tile(index int) *ebiten.Image
+	"github.com/dqso/after-the-last/collision"
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+type tilesetListProvider interface {
+	Tile(tileID int) *ebiten.Image
 	TileW() int
 	TileH() int
 }
 
 // World holds the tile map, entities, and renders them.
 type World struct {
-	tiles     tileProvider
-	floor     [][]int // floor[row][col] = tile index, -1 = empty
-	walls     [][]int // walls[row][col] = tile index, -1 = empty
-	itemTiles tileProvider
-	items     [][]int           // items[row][col] = tile index, -1 = empty
-	collision [][]CollisionType // collision[row][col]
+	tiles     tilesetListProvider
+	floor     [][]int            // floor[row][col] = tile index, -1 = empty
+	walls     [][]int            // walls[row][col] = tile index, -1 = empty
+	items     [][]int            // items[row][col] = tile index, -1 = empty
+	collision [][]collision.Type // collision[row][col]
 	cols      int
 	rows      int
 	player    *Player
 }
 
-func NewWorld(ts tileProvider, floor, walls [][]int, itemTiles tileProvider, items [][]int, collision [][]CollisionType, player *Player) *World {
+func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, collision [][]collision.Type, player *Player) *World {
 	rows := len(floor)
 	cols := 0
 	if rows > 0 {
@@ -31,7 +35,6 @@ func NewWorld(ts tileProvider, floor, walls [][]int, itemTiles tileProvider, ite
 		tiles:     ts,
 		floor:     floor,
 		walls:     walls,
-		itemTiles: itemTiles,
 		items:     items,
 		collision: collision,
 		cols:      cols,
@@ -67,10 +70,10 @@ func (w *World) CollidesAt(x, y float64) bool {
 	th := float64(w.tiles.TileH())
 	col, row := int(x/tw), int(y/th)
 	ct := w.collisionAt(col, row)
-	if ct == CollFree {
+	if ct == collision.Free {
 		return false
 	}
-	if ct == CollBlocked {
+	if ct == collision.Blocked {
 		return true
 	}
 	tileL, tileT := float64(col)*tw, float64(row)*th
@@ -93,7 +96,7 @@ func (w *World) EllipseCollidesAt(cx, cy, rx, ry float64) bool {
 	for row := rowMin; row <= rowMax; row++ {
 		for col := colMin; col <= colMax; col++ {
 			ct := w.collisionAt(col, row)
-			if ct != CollFree && w.ellipseOverlapsSubrect(cx, cy, rx, ry, col, row, ct, tw, th) {
+			if ct != collision.Free && w.ellipseOverlapsSubrect(cx, cy, rx, ry, col, row, ct, tw, th) {
 				return true
 			}
 		}
@@ -101,16 +104,16 @@ func (w *World) EllipseCollidesAt(cx, cy, rx, ry float64) bool {
 	return false
 }
 
-func (w *World) collisionAt(col, row int) CollisionType {
+func (w *World) collisionAt(col, row int) collision.Type {
 	if row < 0 || row >= len(w.collision) || col < 0 || col >= len(w.collision[row]) {
-		return CollBlocked
+		return collision.Blocked
 	}
 	return w.collision[row][col]
 }
 
 // ellipseOverlapsSubrect checks if ellipse at (cx,cy) with radii (rx,ry) overlaps
 // the blocked sub-rect of the tile defined by ct.
-func (w *World) ellipseOverlapsSubrect(cx, cy, rx, ry float64, col, row int, ct CollisionType, tw, th float64) bool {
+func (w *World) ellipseOverlapsSubrect(cx, cy, rx, ry float64, col, row int, ct collision.Type, tw, th float64) bool {
 	tileL, tileT := float64(col)*tw, float64(row)*th
 	fx0, fy0, fx1, fy1 := blockedSubrect(ct)
 	l := tileL + fx0*tw
@@ -124,6 +127,29 @@ func (w *World) ellipseOverlapsSubrect(cx, cy, rx, ry float64, col, row int, ct 
 	return dx*dx+dy*dy <= 1
 }
 
+// FindFreeCell returns (col, row, true) for a cell with collision.Free.
+// If rng is nil, the first such cell (top-left scan) is returned; otherwise
+// a random one is picked. Returns (0, 0, false) if none exists.
+func (w *World) FindFreeCell(rng *rand.Rand) (col, row int, ok bool) {
+	var candidates [][2]int
+	for r := 0; r < w.rows; r++ {
+		for c := 0; c < w.cols; c++ {
+			if w.collisionAt(c, r) != collision.Free {
+				continue
+			}
+			if rng == nil {
+				return c, r, true
+			}
+			candidates = append(candidates, [2]int{c, r})
+		}
+	}
+	if len(candidates) == 0 {
+		return 0, 0, false
+	}
+	pick := candidates[rng.Intn(len(candidates))]
+	return pick[0], pick[1], true
+}
+
 // CellCenter returns the world-space center of cell (col, row).
 func (w *World) CellCenter(col, row int) (float64, float64) {
 	tw := float64(w.tiles.TileW())
@@ -135,7 +161,7 @@ func (w *World) CellCenter(col, row int) (float64, float64) {
 // falls within the window [tilePivotY-th, tilePivotY) of the current row.
 func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 	for row := range w.floor {
-		w.drawRow(screen, w.tiles, w.floor, row, cam, screenW, screenH)
+		w.drawRow(screen, w.floor, row, cam, screenW, screenH)
 	}
 
 	th := float64(w.tiles.TileH())
@@ -149,8 +175,8 @@ func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 			playerDrawn = true
 		}
 
-		w.drawRow(screen, w.tiles, w.walls, row, cam, screenW, screenH)
-		w.drawRow(screen, w.itemTiles, w.items, row, cam, screenW, screenH)
+		w.drawRow(screen, w.walls, row, cam, screenW, screenH)
+		w.drawRow(screen, w.items, row, cam, screenW, screenH)
 	}
 
 	if !playerDrawn {
@@ -158,12 +184,12 @@ func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 	}
 }
 
-func (w *World) drawRow(screen *ebiten.Image, tiles tileProvider, layer [][]int, row int, cam *Camera, screenW, screenH int) {
+func (w *World) drawRow(screen *ebiten.Image, layer [][]int, row int, cam *Camera, screenW, screenH int) {
 	if row >= len(layer) {
 		return
 	}
-	tw := float64(tiles.TileW())
-	th := float64(tiles.TileH())
+	tw := float64(w.tiles.TileW())
+	th := float64(w.tiles.TileH())
 	hw, hh := float64(screenW)/2, float64(screenH)/2
 
 	for col, tileIdx := range layer[row] {
@@ -176,6 +202,6 @@ func (w *World) drawRow(screen *ebiten.Image, tiles tileProvider, layer [][]int,
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(Scale, Scale)
 		op.GeoM.Translate(sx, sy)
-		screen.DrawImage(tiles.Tile(tileIdx), op)
+		screen.DrawImage(w.tiles.Tile(tileIdx), op)
 	}
 }

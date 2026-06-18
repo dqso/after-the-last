@@ -1,40 +1,27 @@
 package game
 
-type CollisionType int
-
-const (
-	CollFree         CollisionType = 0 // passable
-	CollBlocked      CollisionType = 1 // fully blocked
-	CollBlockedTL    CollisionType = 2 // top-left quarter blocked
-	CollBlockedTR    CollisionType = 3 // top-right quarter blocked
-	CollBlockedBL    CollisionType = 4 // bottom-left quarter blocked
-	CollBlockedBR    CollisionType = 5 // bottom-right quarter blocked
-	CollBlockedTop   CollisionType = 6 // upper half blocked
-	CollBlockedBot   CollisionType = 7 // lower half blocked
-	CollBlockedLeft  CollisionType = 8 // left half blocked
-	CollBlockedRight CollisionType = 9 // right half blocked
-)
+import "github.com/dqso/after-the-last/collision"
 
 // blockedSubrect returns the blocked region of a tile as fractions [0,1] of (tileW, tileH).
-func blockedSubrect(ct CollisionType) (x0, y0, x1, y1 float64) {
+func blockedSubrect(ct collision.Type) (x0, y0, x1, y1 float64) {
 	switch ct {
-	case CollBlocked:
+	case collision.Blocked:
 		return 0, 0, 1, 1
-	case CollBlockedTL:
+	case collision.BlockedTL:
 		return 0, 0, 0.5, 0.5
-	case CollBlockedTR:
+	case collision.BlockedTR:
 		return 0.5, 0, 1, 0.5
-	case CollBlockedBL:
+	case collision.BlockedBL:
 		return 0, 0.5, 0.5, 1
-	case CollBlockedBR:
+	case collision.BlockedBR:
 		return 0.5, 0.5, 1, 1
-	case CollBlockedTop:
+	case collision.BlockedTop:
 		return 0, 0, 1, 0.5
-	case CollBlockedBot:
+	case collision.BlockedBot:
 		return 0, 0.5, 1, 1
-	case CollBlockedLeft:
+	case collision.BlockedLeft:
 		return 0, 0, 0.5, 1
-	case CollBlockedRight:
+	case collision.BlockedRight:
 		return 0.5, 0, 1, 1
 	default:
 		return 0, 0, 0, 0

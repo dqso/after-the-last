@@ -17,7 +17,7 @@ type Tileset struct {
 	cols  int
 }
 
-func New(data []byte, tileW, tileH int) (*Tileset, error) {
+func NewTileSet(data []byte, tileW, tileH int) (*Tileset, error) {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

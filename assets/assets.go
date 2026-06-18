@@ -15,3 +15,9 @@ var InteriorsSheet []byte
 
 //go:embed "Modern tiles_Free/Interiors_free/16x16/Room_Builder_free_16x16.png"
 var RoomBuilderSheet []byte
+
+//go:embed "extra_set_16x16.png"
+var ExtraSheet []byte
+
+//go:embed "tiles.xml"
+var TilesXML []byte
