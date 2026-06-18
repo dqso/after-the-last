@@ -1,0 +1,34 @@
+//kage:unit pixels
+
+package main
+
+// PlayerScreenPos is the player's pivot position in screen pixels.
+var PlayerScreenPos vec2
+
+// DirAngle is the direction the player faces in radians (screen space: right=0, down=pi/2).
+var DirAngle float
+
+// FOVHalfAngle is half the cone angle in radians (e.g. 50 deg = 0.873 rad).
+var FOVHalfAngle float
+
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	dx := dstPos.x - PlayerScreenPos.x
+	dy := dstPos.y - PlayerScreenPos.y
+
+	pixelAngle := atan2(dy, dx)
+	diff := pixelAngle - DirAngle
+
+	// Wrap diff to [-pi, pi].
+	const pi = 3.14159265358979
+	diff = diff - floor((diff+pi)/(2*pi))*(2*pi)
+
+	absDiff := abs(diff)
+
+	// Smooth transition over ~5 degrees at the cone edge.
+	const edgeSoft = 0.087
+	inCone := 1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)
+
+	// Overlay: transparent inside cone, 85% dark outside.
+	darkness := 0.99 * (1.0 - inCone)
+	return vec4(0.0, 0.0, 0.0, darkness)
+}

@@ -21,3 +21,6 @@ var ExtraSheet []byte
 
 //go:embed "tiles.xml"
 var TilesXML []byte
+
+//go:embed "fov.kage"
+var FOVShader []byte

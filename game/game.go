@@ -26,6 +26,7 @@ type Game struct {
 	screenHeight int
 	camera       *Camera
 	world        *World
+	fov          *FOVRenderer
 }
 
 func NewGame(screenWidth, screenHeight int) *Game {
@@ -85,11 +86,17 @@ func NewGame(screenWidth, screenHeight int) *Game {
 	}
 	player.SetPosition(w.CellCenter(col, row))
 
+	fov, err := NewFOVRenderer()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &Game{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 		camera:       NewCamera(),
 		world:        w,
+		fov:          fov,
 	}
 }
 
@@ -101,10 +108,16 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	g.world.Draw(screen, g.camera, g.screenWidth, g.screenHeight)
-	//g.drawWorldAxes(screen)
 
 	p := g.world.Player()
 	sx, sy := g.camera.WorldToScreen(p.X, p.Y, g.screenWidth, g.screenHeight)
+
+	eyeWX, eyeWY := p.EyeWorldPos()
+	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, g.screenWidth, g.screenHeight)
+	g.fov.Draw(screen, eyeSX, eyeSY, p.DirAngle())
+
+	//g.drawWorldAxes(screen)
+
 	info := fmt.Sprintf(
 		"World:  player (%.1f, %.1f)\nCamera: center (%.1f, %.1f)\nScreen: player (%.1f, %.1f)",
 		p.X, p.Y,

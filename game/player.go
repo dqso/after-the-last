@@ -22,6 +22,26 @@ const (
 	dirDown                   // 3
 )
 
+// EyeOffset is an offset in unscaled sprite pixels from the top-left corner of the sprite tile.
+type EyeOffset struct {
+	X, Y float64
+}
+
+// EyeOffsetsIdle holds eye offsets for the idle animation, indexed by direction.
+// Directions: dirRight=0, dirUp=1, dirLeft=2, dirDown=3.
+var EyeOffsetsIdle = [4]EyeOffset{
+	{12, 20.5}, {8, 21}, {4, 20.5}, {8, 21},
+}
+
+// EyeOffsetsRun holds eye offsets for the run animation, indexed by [direction][frame].
+// 4 directions × runFrames(6) frames.
+var EyeOffsetsRun = [4][runFrames]EyeOffset{
+	{{12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}},
+	{{8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}},
+	{{4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}},
+	{{8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}},
+}
+
 type Player struct {
 	X, Y        float64 // world position = bottom-center of sprite (pivot)
 	CollisionRX float64
@@ -93,6 +113,38 @@ func (p *Player) Update() {
 		p.tick = 0
 		p.frame = 0
 	}
+}
+
+// EyeOffset returns the tile-local offset (from sprite top-left, unscaled pixels) for the current frame.
+func (p *Player) EyeOffset() EyeOffset {
+	if p.moving {
+		return EyeOffsetsRun[p.dir][p.frame]
+	}
+	return EyeOffsetsIdle[p.dir]
+}
+
+// EyeWorldPos converts the current frame's eye offset to world coordinates.
+func (p *Player) EyeWorldPos() (float64, float64) {
+	off := p.EyeOffset()
+	tw := float64(p.tiles.TileW())
+	th := float64(p.tiles.TileH())
+	// Pivot is bottom-center: sprite top-left = (p.X - tw/2, p.Y - th).
+	return p.X - tw/2 + off.X, p.Y - th + off.Y
+}
+
+// DirAngle returns the facing direction in radians (right=0, down=π/2, left=π, up=-π/2).
+func (p *Player) DirAngle() float64 {
+	switch p.dir {
+	case dirRight:
+		return 0
+	case dirDown:
+		return math.Pi / 2
+	case dirLeft:
+		return math.Pi
+	case dirUp:
+		return -math.Pi / 2
+	}
+	return 0
 }
 
 func (p *Player) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
