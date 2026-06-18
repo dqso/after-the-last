@@ -11,6 +11,9 @@ const (
 	playerSpeed       = 1.0
 	animTicksPerFrame = 8
 	runFrames         = 6
+
+	// faceSpeed is the maximum head rotation in radians per tick (~300°/s at 60 TPS).
+	faceSpeed = 5 * math.Pi / 180
 )
 
 type direction int
@@ -22,31 +25,16 @@ const (
 	dirDown                   // 3
 )
 
-// EyeOffset is an offset in unscaled sprite pixels from the top-left corner of the sprite tile.
-type EyeOffset struct {
-	X, Y float64
-}
-
-// EyeOffsetsIdle holds eye offsets for the idle animation, indexed by direction.
-// Directions: dirRight=0, dirUp=1, dirLeft=2, dirDown=3.
-var EyeOffsetsIdle = [4]EyeOffset{
-	{12, 20.5}, {8, 21}, {4, 20.5}, {8, 21},
-}
-
-// EyeOffsetsRun holds eye offsets for the run animation, indexed by [direction][frame].
-// 4 directions × runFrames(6) frames.
-var EyeOffsetsRun = [4][runFrames]EyeOffset{
-	{{12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}, {12, 20.5}},
-	{{8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}},
-	{{4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}, {4, 20.5}},
-	{{8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}, {8, 21}},
-}
+// eyeOffsetX, eyeOffsetY — fixed eye position in unscaled sprite pixels from the sprite's top-left corner.
+const eyeOffsetX, eyeOffsetY = 8.0, 21.0
 
 type Player struct {
 	X, Y        float64 // world position = bottom-center of sprite (pivot)
 	CollisionRX float64
 	CollisionRY float64
 	dir         direction
+	mouseAngle  float64 // raw screen-space angle from eye to cursor (right=0, down=π/2)
+	faceAngle   float64 // current smoothed facing angle, chases mouseAngle at faceSpeed
 	moving      bool
 	frame       int
 	tick        int
@@ -67,6 +55,26 @@ func (p *Player) SetPosition(x, y float64) {
 	p.Y = y
 }
 
+// SetMouseAngle stores the screen-space angle from the player's eye to the cursor.
+// Must be called before Update() each frame.
+func (p *Player) SetMouseAngle(angle float64) {
+	p.mouseAngle = angle
+}
+
+// dirFromAngle snaps a screen-space angle to one of 4 sprite directions.
+func dirFromAngle(angle float64) direction {
+	switch {
+	case angle >= -math.Pi/4 && angle < math.Pi/4:
+		return dirRight
+	case angle >= math.Pi/4 && angle < 3*math.Pi/4:
+		return dirDown
+	case angle >= -3*math.Pi/4 && angle < -math.Pi/4:
+		return dirUp
+	default:
+		return dirLeft
+	}
+}
+
 func (p *Player) Update() {
 	dx, dy := 0.0, 0.0
 
@@ -85,6 +93,18 @@ func (p *Player) Update() {
 
 	p.moving = dx != 0 || dy != 0
 
+	// Rotate faceAngle toward mouseAngle along the shortest arc.
+	diff := math.Atan2(math.Sin(p.mouseAngle-p.faceAngle), math.Cos(p.mouseAngle-p.faceAngle))
+	if math.Abs(diff) <= faceSpeed {
+		p.faceAngle = p.mouseAngle
+	} else {
+		p.faceAngle += math.Copysign(faceSpeed, diff)
+		p.faceAngle = math.Atan2(math.Sin(p.faceAngle), math.Cos(p.faceAngle))
+	}
+
+	// Sprite direction always follows mouse, even during movement (can run backwards).
+	p.dir = dirFromAngle(p.faceAngle)
+
 	if p.moving {
 		if dx != 0 && dy != 0 {
 			dx *= math.Sqrt2 / 2
@@ -92,17 +112,6 @@ func (p *Player) Update() {
 		}
 		p.X += dx
 		p.Y += dy
-
-		// Horizontal takes priority for direction.
-		if dx > 0 {
-			p.dir = dirRight
-		} else if dx < 0 {
-			p.dir = dirLeft
-		} else if dy < 0 {
-			p.dir = dirUp
-		} else {
-			p.dir = dirDown
-		}
 
 		p.tick++
 		if p.tick >= animTicksPerFrame {
@@ -115,36 +124,33 @@ func (p *Player) Update() {
 	}
 }
 
-// EyeOffset returns the tile-local offset (from sprite top-left, unscaled pixels) for the current frame.
-func (p *Player) EyeOffset() EyeOffset {
-	if p.moving {
-		return EyeOffsetsRun[p.dir][p.frame]
+func (p *Player) Moving() bool { return p.moving }
+
+func (p *Player) DirName() string {
+	switch p.dir {
+	case dirRight:
+		return "right"
+	case dirLeft:
+		return "left"
+	case dirUp:
+		return "up"
+	case dirDown:
+		return "down"
 	}
-	return EyeOffsetsIdle[p.dir]
+	return "?"
 }
 
-// EyeWorldPos converts the current frame's eye offset to world coordinates.
+// EyeWorldPos returns the eye position in world coordinates.
 func (p *Player) EyeWorldPos() (float64, float64) {
-	off := p.EyeOffset()
 	tw := float64(p.tiles.TileW())
 	th := float64(p.tiles.TileH())
 	// Pivot is bottom-center: sprite top-left = (p.X - tw/2, p.Y - th).
-	return p.X - tw/2 + off.X, p.Y - th + off.Y
+	return p.X - tw/2 + eyeOffsetX, p.Y - th + eyeOffsetY
 }
 
-// DirAngle returns the facing direction in radians (right=0, down=π/2, left=π, up=-π/2).
+// DirAngle returns the current smoothed facing angle in radians for use by the FOV shader.
 func (p *Player) DirAngle() float64 {
-	switch p.dir {
-	case dirRight:
-		return 0
-	case dirDown:
-		return math.Pi / 2
-	case dirLeft:
-		return math.Pi
-	case dirUp:
-		return -math.Pi / 2
-	}
-	return 0
+	return p.faceAngle
 }
 
 func (p *Player) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"time"
 
@@ -101,8 +102,17 @@ func NewGame(screenWidth, screenHeight int) *Game {
 }
 
 func (g *Game) Update() error {
+	p := g.world.Player()
+
+	// Compute screen-space angle from player's eye to mouse cursor.
+	eyeWX, eyeWY := p.EyeWorldPos()
+	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, g.screenWidth, g.screenHeight)
+	mx, my := ebiten.CursorPosition()
+	mouseAngle := math.Atan2(float64(my)-eyeSY, float64(mx)-eyeSX)
+	p.SetMouseAngle(mouseAngle)
+
 	g.world.Update()
-	g.camera.Follow(g.world.Player().X, g.world.Player().Y)
+	g.camera.Follow(p.X, p.Y)
 	return nil
 }
 
@@ -110,7 +120,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.world.Draw(screen, g.camera, g.screenWidth, g.screenHeight)
 
 	p := g.world.Player()
-	sx, sy := g.camera.WorldToScreen(p.X, p.Y, g.screenWidth, g.screenHeight)
 
 	eyeWX, eyeWY := p.EyeWorldPos()
 	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, g.screenWidth, g.screenHeight)
@@ -119,10 +128,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	//g.drawWorldAxes(screen)
 
 	info := fmt.Sprintf(
-		"World:  player (%.1f, %.1f)\nCamera: center (%.1f, %.1f)\nScreen: player (%.1f, %.1f)",
-		p.X, p.Y,
-		g.camera.X, g.camera.Y,
-		sx, sy,
+		"World: player (%.1f, %.1f)\nMouse: angle %.1f°",
+		p.X, p.Y, math.Mod(p.DirAngle()*180/math.Pi+360, 360),
 	)
 	ebitenutil.DebugPrint(screen, info)
 }
