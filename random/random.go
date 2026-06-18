@@ -146,6 +146,13 @@ func NewGenerator(tileInfoXML []byte) (Generator, error) {
 
 const none = -1
 
+const (
+	// ButtonInactiveTileID is ExtraSheet tile 4 — button off state.
+	ButtonInactiveTileID = 0x00030004
+	// ButtonActiveTileID is ExtraSheet tile 2 — button on state.
+	ButtonActiveTileID = 0x00030002
+)
+
 func (g Generator) GenerateV0() ([][]int, [][]int, [][]int, [][]int) {
 	var floorGrid = [][]int{
 		{none, none, none, none, none, none, none, none, none},
@@ -299,6 +306,10 @@ func (g Generator) GenerateV1(seed int64) ([][]int, [][]int, [][]int, [][]int) {
 		collisionGrid[height-1][col] = collision.BlockedBot
 	}
 	collisionGrid[height-1][width-1] = collision.Blocked
+
+	// Place one button on a random tile of the bottom inner wall face.
+	buttonCol := 1 + rnd.Intn(width-2)
+	itemsGrid[1][buttonCol] = ButtonInactiveTileID
 
 	return floorGrid, wallsGrid, itemsGrid, collisionGrid
 }

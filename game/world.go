@@ -4,6 +4,7 @@ import (
 	"math/rand"
 
 	"github.com/dqso/after-the-last/collision"
+	"github.com/dqso/after-the-last/random"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -11,6 +12,16 @@ type tilesetListProvider interface {
 	Tile(tileID int) *ebiten.Image
 	TileW() int
 	TileH() int
+}
+
+// buttonToggleTicks is how many Update ticks between button state changes (60 TPS = 1 s).
+const buttonToggleTicks = 60
+
+// button tracks an animated wall button at a fixed grid position.
+type button struct {
+	row, col int
+	tick     int
+	active   bool
 }
 
 // World holds the tile map, entities, and renders them.
@@ -23,6 +34,7 @@ type World struct {
 	cols      int
 	rows      int
 	player    *Player
+	buttons   []button
 }
 
 func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, collision [][]collision.Type, player *Player) *World {
@@ -31,6 +43,17 @@ func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, colli
 	if rows > 0 {
 		cols = len(floor[0])
 	}
+
+	// Collect buttons from the items grid.
+	var buttons []button
+	for r, row := range items {
+		for c, id := range row {
+			if id == random.ButtonInactiveTileID || id == random.ButtonActiveTileID {
+				buttons = append(buttons, button{row: r, col: c})
+			}
+		}
+	}
+
 	return &World{
 		tiles:     ts,
 		floor:     floor,
@@ -40,12 +63,33 @@ func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, colli
 		cols:      cols,
 		rows:      rows,
 		player:    player,
+		buttons:   buttons,
 	}
 }
 
 func (w *World) Player() *Player { return w.player }
 
+// updateButtons advances each button's tick and toggles its tile ID every second.
+func (w *World) updateButtons() {
+	for i := range w.buttons {
+		b := &w.buttons[i]
+		b.tick++
+		if b.tick < buttonToggleTicks {
+			continue
+		}
+		b.tick = 0
+		b.active = !b.active
+		if b.active {
+			w.items[b.row][b.col] = random.ButtonActiveTileID
+		} else {
+			w.items[b.row][b.col] = random.ButtonInactiveTileID
+		}
+	}
+}
+
 func (w *World) Update() {
+	w.updateButtons()
+
 	oldX, oldY := w.player.X, w.player.Y
 	w.player.Update()
 
