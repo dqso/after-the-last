@@ -28,6 +28,9 @@ type Game struct {
 	camera       *Camera
 	world        *World
 	fov          *FOVRenderer
+	memory       *MemoryLayer
+	memoryScreen *ebiten.Image // screen-sized projection of memory for the FOV shader
+	lastDraw     time.Time
 }
 
 func NewGame(screenWidth, screenHeight int) *Game {
@@ -92,12 +95,19 @@ func NewGame(screenWidth, screenHeight int) *Game {
 		log.Fatal(err)
 	}
 
+	worldPixW, worldPixH := w.WorldPixelSize()
+	mem, err := NewMemoryLayer(worldPixW, worldPixH)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &Game{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 		camera:       NewCamera(),
 		world:        w,
 		fov:          fov,
+		memory:       mem,
 	}
 }
 
@@ -117,13 +127,30 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	g.world.Draw(screen, g.camera, g.screenWidth, g.screenHeight)
+	// Compute actual frame delta for accurate memory decay/fade.
+	now := time.Now()
+	dt := now.Sub(g.lastDraw).Seconds()
+	if g.lastDraw.IsZero() || dt > 0.1 {
+		dt = 1.0 / 60.0
+	}
+	g.lastDraw = now
+
+	sw, sh := g.screenWidth, g.screenHeight
+
+	// Recreate the screen-sized memory proxy if dimensions changed.
+	if g.memoryScreen == nil || g.memoryScreen.Bounds().Dx() != sw || g.memoryScreen.Bounds().Dy() != sh {
+		g.memoryScreen = ebiten.NewImage(sw, sh)
+	}
+
+	g.world.Draw(screen, g.camera, sw, sh)
 
 	p := g.world.Player()
-
 	eyeWX, eyeWY := p.EyeWorldPos()
-	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, g.screenWidth, g.screenHeight)
-	g.fov.Draw(screen, eyeSX, eyeSY, p.DirAngle())
+	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, sw, sh)
+
+	g.memory.Update(eyeWX, eyeWY, p.DirAngle(), dt, sw, sh)
+	g.memory.DrawToScreen(g.memoryScreen, g.camera, sw, sh)
+	g.fov.Draw(screen, g.memoryScreen, eyeSX, eyeSY, p.DirAngle())
 
 	//g.drawWorldAxes(screen)
 

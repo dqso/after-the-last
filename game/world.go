@@ -69,6 +69,11 @@ func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, colli
 
 func (w *World) Player() *Player { return w.player }
 
+// WorldPixelSize returns the world dimensions in unscaled tile pixels.
+func (w *World) WorldPixelSize() (int, int) {
+	return w.cols * w.tiles.TileW(), w.rows * w.tiles.TileH()
+}
+
 // updateButtons advances each button's tick and toggles its tile ID every second.
 func (w *World) updateButtons() {
 	for i := range w.buttons {
@@ -228,7 +233,11 @@ func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 	}
 }
 
-func (w *World) drawRow(screen *ebiten.Image, layer [][]int, row int, cam *Camera, screenW, screenH int) {
+type ebitenImage interface {
+	DrawImage(img *ebiten.Image, options *ebiten.DrawImageOptions)
+}
+
+func (w *World) drawRow(screen ebitenImage, layer [][]int, row int, cam *Camera, screenW, screenH int) {
 	if row >= len(layer) {
 		return
 	}

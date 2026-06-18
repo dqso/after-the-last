@@ -1,0 +1,46 @@
+//kage:unit pixels
+
+package main
+
+// EyeWorldPos is the player's eye position in world-pixel coordinates.
+var EyeWorldPos vec2
+
+// DirAngle is the facing direction in radians (right=0, down=pi/2).
+var DirAngle float
+
+// FOVHalfAngle is half the cone angle in radians.
+var FOVHalfAngle float
+
+// DecayDelta is the memory strength lost this frame for out-of-FOV pixels.
+var DecayDelta float
+
+// FadeInDelta is the memory strength gained this frame for in-FOV pixels.
+var FadeInDelta float
+
+// MaxViewRadius limits memory updates to pixels within the screen-visible range (world pixels).
+var MaxViewRadius float
+
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	memVal := imageSrc0At(srcPos).r
+
+	dx := dstPos.x - EyeWorldPos.x
+	dy := dstPos.y - EyeWorldPos.y
+
+	// No memory update beyond the player's screen-visible range.
+	dist := sqrt(dx*dx + dy*dy)
+	inRange := 1.0 - smoothstep(MaxViewRadius*0.85, MaxViewRadius, dist)
+
+	pixelAngle := atan2(dy, dx)
+	diff := pixelAngle - DirAngle
+	const pi = 3.14159265358979
+	diff = diff - floor((diff+pi)/(2*pi))*(2*pi)
+	absDiff := abs(diff)
+
+	const edgeSoft = 0.087
+	inCone := (1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)) * inRange
+
+	decayed := max(memVal-DecayDelta, 0.0)
+	acquired := min(memVal+FadeInDelta, 1.0)
+	newVal := mix(decayed, acquired, inCone)
+	return vec4(newVal, newVal, newVal, 1.0)
+}

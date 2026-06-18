@@ -24,3 +24,6 @@ var TilesXML []byte
 
 //go:embed "fov.kage"
 var FOVShader []byte
+
+//go:embed "memory_update.kage"
+var MemoryUpdateShader []byte
