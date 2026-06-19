@@ -23,8 +23,13 @@ var MaxViewRadius float
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	memVal := imageSrc0At(srcPos).r
 
-	dx := dstPos.x - EyeWorldPos.x
-	dy := dstPos.y - EyeWorldPos.y
+	// dstPos carries the destination image's atlas offset. Subtract the origin
+	// to get local (world-pixel) coordinates; otherwise the ping-pong buffers,
+	// which sit at different atlas offsets, would write the cone at two shifted
+	// world positions on alternating frames (a ghost second cone that never decays).
+	worldPos := dstPos.xy - imageDstOrigin()
+	dx := worldPos.x - EyeWorldPos.x
+	dy := worldPos.y - EyeWorldPos.y
 
 	// No memory update beyond the player's screen-visible range.
 	dist := sqrt(dx*dx + dy*dy)
