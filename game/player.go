@@ -5,6 +5,7 @@ import (
 
 	"github.com/dqso/after-the-last/tileset"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 const (
@@ -14,6 +15,9 @@ const (
 
 	// faceSpeed is the maximum head rotation in radians per tick (~300°/s at 60 TPS).
 	faceSpeed = 5 * math.Pi / 180
+
+	// memoryStep is how much the memory stat changes per "[" / "]" key press.
+	memoryStep = 1.0
 )
 
 type direction int
@@ -28,17 +32,25 @@ const (
 // eyeOffsetX, eyeOffsetY — fixed eye position in unscaled sprite pixels from the sprite's top-left corner.
 const eyeOffsetX, eyeOffsetY = 8.0, 21.0
 
+// defaultMemory is the starting memory stat for a new player (mid-scale pace).
+const defaultMemory = 70.0
+
 type Player struct {
 	X, Y        float64 // world position = bottom-center of sprite (pivot)
 	CollisionRX float64
 	CollisionRY float64
-	dir         direction
-	mouseAngle  float64 // raw screen-space angle from eye to cursor (right=0, down=π/2)
-	faceAngle   float64 // current smoothed facing angle, chases mouseAngle at faceSpeed
-	moving      bool
-	frame       int
-	tick        int
-	tiles       tilesetListProvider
+
+	// Memory is the player's memory stat on a [0,100] scale: how fast areas that
+	// were seen but are now outside the FOV cone fade to black. 0 = forgets
+	// instantly (memory off), 100 = never forgets. See memoryDecayRate.
+	Memory     float64
+	dir        direction
+	mouseAngle float64 // raw screen-space angle from eye to cursor (right=0, down=π/2)
+	faceAngle  float64 // current smoothed facing angle, chases mouseAngle at faceSpeed
+	moving     bool
+	frame      int
+	tick       int
+	tiles      tilesetListProvider
 }
 
 func NewPlayer(tiles tilesetListProvider, collisionRX, collisionRY float64) *Player {
@@ -47,6 +59,7 @@ func NewPlayer(tiles tilesetListProvider, collisionRX, collisionRY float64) *Pla
 		CollisionRX: collisionRX,
 		CollisionRY: collisionRY,
 		dir:         dirDown,
+		Memory:      defaultMemory,
 	}
 }
 
@@ -76,6 +89,14 @@ func dirFromAngle(angle float64) direction {
 }
 
 func (p *Player) Update() {
+	// "[" / "]" tune the memory stat live (clamped to [0,100]) for visual tuning.
+	if inpututil.IsKeyJustPressed(ebiten.KeyBracketLeft) {
+		p.Memory = math.Max(0, p.Memory-memoryStep)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyBracketRight) {
+		p.Memory = math.Min(100, p.Memory+memoryStep)
+	}
+
 	dx, dy := 0.0, 0.0
 
 	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyArrowUp) {

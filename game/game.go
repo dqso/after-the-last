@@ -156,15 +156,23 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	eyeWX, eyeWY := p.EyeWorldPos()
 	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, sw, sh)
 
-	g.memory.Update(g.worldColor, eyeWX, eyeWY, p.DirAngle(), dt, sw, sh)
+	g.memory.Update(g.worldColor, eyeWX, eyeWY, p.DirAngle(), dt, p.Memory, sw, sh)
 	g.memory.DrawToScreen(g.memoryScreen, g.camera, sw, sh)
 	g.fov.Draw(screen, g.memoryScreen, eyeSX, eyeSY, p.DirAngle())
 
 	//g.drawWorldAxes(screen)
 
+	// Memory forget time as a human-readable string ("infinity" when the player never forgets).
+	forget := memoryForgetSeconds(p.Memory)
+	forgetStr := "infinity"
+	if !math.IsInf(forget, 1) {
+		forgetStr = fmt.Sprintf("%.1fs", forget)
+	}
+
 	info := fmt.Sprintf(
-		"World: player (%.1f, %.1f)\nMouse: angle %.1f°",
+		"World: player (%.1f, %.1f)\nMouse: angle %.1f°\nMemory [ / ]: %.0f/100  forget: %s",
 		p.X, p.Y, math.Mod(p.DirAngle()*180/math.Pi+360, 360),
+		p.Memory, forgetStr,
 	)
 	ebitenutil.DebugPrint(screen, info)
 }

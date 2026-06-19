@@ -20,6 +20,12 @@ var FadeInDelta float
 // MaxViewRadius limits memory updates to pixels within the screen-visible range (world pixels).
 var MaxViewRadius float
 
+// MemoryMaxStrength caps the strength of out-of-FOV pixels. A pixel is at full
+// strength (1.0) only while inside the cone; the moment it leaves, its strength
+// is clamped to this value, producing an instant darkening step before the slow
+// decay toward black continues.
+var MemoryMaxStrength float
+
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	// image0: previous memory (rgb = frozen color, a = strength).
 	prev := imageSrc0At(srcPos)
@@ -50,8 +56,11 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	const edgeSoft = 0.087
 	inCone := (1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)) * inRange
 
-	// Strength: gained inside the cone, decayed outside.
-	decayed := max(prev.a-DecayDelta, 0.0)
+	// Strength: gained inside the cone, decayed outside. Out-of-cone strength is
+	// clamped to MemoryMaxStrength, so a pixel just leaving the cone drops from
+	// full (1.0) to that cap in a single frame (instant darkening step) and then
+	// keeps decaying toward 0 (full black).
+	decayed := min(max(prev.a-DecayDelta, 0.0), MemoryMaxStrength)
 	acquired := min(prev.a+FadeInDelta, 1.0)
 	newStrength := mix(decayed, acquired, inCone)
 
