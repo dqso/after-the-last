@@ -29,6 +29,7 @@ type Game struct {
 	world        *World
 	fov          *FOVRenderer
 	memory       *MemoryLayer
+	worldColor   *ebiten.Image // world-pixel snapshot of the live world for the memory layer
 	memoryScreen *ebiten.Image // screen-sized projection of memory for the FOV shader
 	lastDraw     time.Time
 }
@@ -108,6 +109,7 @@ func NewGame(screenWidth, screenHeight int) *Game {
 		world:        w,
 		fov:          fov,
 		memory:       mem,
+		worldColor:   ebiten.NewImage(worldPixW, worldPixH),
 	}
 }
 
@@ -144,11 +146,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	g.world.Draw(screen, g.camera, sw, sh)
 
+	// Refresh the world color snapshot only when tiles actually changed; for a
+	// large mostly-static map this avoids redrawing every tile each frame.
+	if g.world.ColorDirty() {
+		g.world.DrawWorldSpace(g.worldColor)
+	}
+
 	p := g.world.Player()
 	eyeWX, eyeWY := p.EyeWorldPos()
 	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, sw, sh)
 
-	g.memory.Update(eyeWX, eyeWY, p.DirAngle(), dt, sw, sh)
+	g.memory.Update(g.worldColor, eyeWX, eyeWY, p.DirAngle(), dt, sw, sh)
 	g.memory.DrawToScreen(g.memoryScreen, g.camera, sw, sh)
 	g.fov.Draw(screen, g.memoryScreen, eyeSX, eyeSY, p.DirAngle())
 

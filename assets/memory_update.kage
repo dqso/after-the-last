@@ -21,7 +21,13 @@ var FadeInDelta float
 var MaxViewRadius float
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
-	memVal := imageSrc0At(srcPos).r
+	// image0: previous memory (rgb = frozen color, a = strength).
+	prev := imageSrc0At(srcPos)
+
+	// image1: live world color snapshot. All source images share one coordinate
+	// space (image0's), and ebiten remaps srcPos into each image's own atlas
+	// region internally — so sample with the raw srcPos, never re-add origins.
+	fresh := imageSrc1At(srcPos).rgb
 
 	// dstPos carries the destination image's atlas offset. Subtract the origin
 	// to get local (world-pixel) coordinates; otherwise the ping-pong buffers,
@@ -44,8 +50,13 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	const edgeSoft = 0.087
 	inCone := (1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)) * inRange
 
-	decayed := max(memVal-DecayDelta, 0.0)
-	acquired := min(memVal+FadeInDelta, 1.0)
-	newVal := mix(decayed, acquired, inCone)
-	return vec4(newVal, newVal, newVal, 1.0)
+	// Strength: gained inside the cone, decayed outside.
+	decayed := max(prev.a-DecayDelta, 0.0)
+	acquired := min(prev.a+FadeInDelta, 1.0)
+	newStrength := mix(decayed, acquired, inCone)
+
+	// Color: refreshed to the live world inside the cone, kept frozen outside.
+	newColor := mix(prev.rgb, fresh, inCone)
+
+	return vec4(newColor, newStrength)
 }

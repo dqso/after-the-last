@@ -35,6 +35,11 @@ type World struct {
 	rows      int
 	player    *Player
 	buttons   []button
+
+	// colorDirty marks that the world color snapshot must be re-rendered for
+	// the memory layer (set on tile changes). Avoids redrawing a large, mostly
+	// static map every frame.
+	colorDirty bool
 }
 
 func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, collision [][]collision.Type, player *Player) *World {
@@ -64,6 +69,8 @@ func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, colli
 		rows:      rows,
 		player:    player,
 		buttons:   buttons,
+
+		colorDirty: true, // force initial snapshot render
 	}
 }
 
@@ -89,6 +96,7 @@ func (w *World) updateButtons() {
 		} else {
 			w.items[b.row][b.col] = random.ButtonInactiveTileID
 		}
+		w.colorDirty = true // tile changed: snapshot needs a refresh
 	}
 }
 
@@ -209,8 +217,10 @@ func (w *World) CellCenter(col, row int) (float64, float64) {
 // Draw renders rows top-to-bottom. The player is inserted when their pivot Y
 // falls within the window [tilePivotY-th, tilePivotY) of the current row.
 func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
+	view := screenView{cam: cam, screenW: screenW, screenH: screenH}
+
 	for row := range w.floor {
-		w.drawRow(screen, w.floor, row, cam, screenW, screenH)
+		w.drawRow(screen, w.floor, row, view)
 	}
 
 	th := float64(w.tiles.TileH())
@@ -224,8 +234,8 @@ func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 			playerDrawn = true
 		}
 
-		w.drawRow(screen, w.walls, row, cam, screenW, screenH)
-		w.drawRow(screen, w.items, row, cam, screenW, screenH)
+		w.drawRow(screen, w.walls, row, view)
+		w.drawRow(screen, w.items, row, view)
 	}
 
 	if !playerDrawn {
@@ -233,28 +243,77 @@ func (w *World) Draw(screen *ebiten.Image, cam *Camera, screenW, screenH int) {
 	}
 }
 
+// DrawWorldSpace renders all tile layers into dst row by row (top-to-bottom),
+// at world-pixel scale (1:1) without camera and without the player. It reuses
+// the same row-drawing flow as Draw to capture a flat color snapshot of the
+// world for the memory layer. dst must be world-pixel sized. It clears the
+// dirty flag so the (large, mostly static) map is re-rendered only on changes.
+func (w *World) DrawWorldSpace(dst *ebiten.Image) {
+	dst.Clear()
+	view := worldView{}
+
+	for row := range w.floor {
+		w.drawRow(dst, w.floor, row, view)
+	}
+	for row := range w.walls {
+		w.drawRow(dst, w.walls, row, view)
+		w.drawRow(dst, w.items, row, view)
+	}
+
+	w.colorDirty = false
+}
+
+// ColorDirty reports whether the world color snapshot needs re-rendering.
+func (w *World) ColorDirty() bool { return w.colorDirty }
+
 type ebitenImage interface {
 	DrawImage(img *ebiten.Image, options *ebiten.DrawImageOptions)
 }
 
-func (w *World) drawRow(screen ebitenImage, layer [][]int, row int, cam *Camera, screenW, screenH int) {
+// tileView computes the draw transform for a tile cell, letting the same row
+// flow target either the screen (camera + Scale) or a flat world-space buffer.
+type tileView interface {
+	tileGeoM(col, row int, tw, th float64) ebiten.GeoM
+}
+
+// screenView projects world tiles to the screen via the camera and Scale.
+type screenView struct {
+	cam              *Camera
+	screenW, screenH int
+}
+
+func (v screenView) tileGeoM(col, row int, tw, th float64) ebiten.GeoM {
+	var g ebiten.GeoM
+	g.Scale(Scale, Scale)
+	g.Translate(
+		(float64(col)*tw-v.cam.X)*Scale+float64(v.screenW)/2,
+		(float64(row)*th-v.cam.Y)*Scale+float64(v.screenH)/2,
+	)
+	return g
+}
+
+// worldView draws tiles 1:1 into a world-pixel-sized buffer (no camera).
+type worldView struct{}
+
+func (worldView) tileGeoM(col, row int, tw, th float64) ebiten.GeoM {
+	var g ebiten.GeoM
+	g.Translate(float64(col)*tw, float64(row)*th)
+	return g
+}
+
+func (w *World) drawRow(dst ebitenImage, layer [][]int, row int, view tileView) {
 	if row >= len(layer) {
 		return
 	}
 	tw := float64(w.tiles.TileW())
 	th := float64(w.tiles.TileH())
-	hw, hh := float64(screenW)/2, float64(screenH)/2
 
 	for col, tileIdx := range layer[row] {
 		if tileIdx == -1 {
 			continue
 		}
-		sx := (float64(col)*tw-cam.X)*Scale + hw
-		sy := (float64(row)*th-cam.Y)*Scale + hh
-
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(Scale, Scale)
-		op.GeoM.Translate(sx, sy)
-		screen.DrawImage(w.tiles.Tile(tileIdx), op)
+		op.GeoM = view.tileGeoM(col, row, tw, th)
+		dst.DrawImage(w.tiles.Tile(tileIdx), op)
 	}
 }

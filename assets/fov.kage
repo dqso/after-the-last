@@ -12,8 +12,9 @@ var DirAngle float
 var FOVHalfAngle float
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
-	// Image0 is the memory layer projected to screen space (R = memory strength 0–1).
-	memAlpha := imageSrc0At(srcPos).r
+	// Image0 is the memory layer projected to screen space:
+	//   rgb = frozen world color, a = memory strength (0–1).
+	mem := imageSrc0At(srcPos)
 
 	dx := dstPos.x - PlayerScreenPos.x
 	dy := dstPos.y - PlayerScreenPos.y
@@ -26,7 +27,12 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	const edgeSoft = 0.087
 	inCone := 1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)
 
-	// Darkness: zero inside the FOV cone; fades in as memory weakens outside it.
-	darkness := (1.0 - inCone) * (1.0 - memAlpha)
-	return vec4(0.0, 0.0, 0.0, darkness*0.99)
+	// Outside the cone, cover the live world with the remembered snapshot,
+	// fading toward black as memory strength decays. Inside the cone, output
+	// nothing (alpha 0) so the live world shows through.
+	cover := 1.0 - inCone
+	rememberedColor := mem.rgb * mem.a // straight color dimmed by strength
+
+	// Premultiplied output for source-over blending onto the live screen.
+	return vec4(rememberedColor*cover, cover)
 }
