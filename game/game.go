@@ -170,7 +170,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	info := fmt.Sprintf(
-		"World: player (%.1f, %.1f)\nMouse: angle %.1f°\nMemory [ / ]: %.0f/100  forget: %s",
+		"TPS% 3d FPS% 4d\nWorld: player (%.1f, %.1f)\nMouse: angle %.1f°\nMemory [ / ]: %.0f/100  forget: %s",
+		int(ebiten.ActualTPS()), int(ebiten.ActualFPS()),
 		p.X, p.Y, math.Mod(p.DirAngle()*180/math.Pi+360, 360),
 		p.Memory, forgetStr,
 	)
