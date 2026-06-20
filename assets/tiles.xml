@@ -58,38 +58,80 @@
             <tile id="62" type="corner_left_bottom" />
             <tile id="63" type="bottom" />
             <tile id="64" type="corner_right_bottom" />
+            <tile id="40" type="big_corner_left_top" />
+            <tile id="39" type="big_corner_left_right" />
         </wall>
         <wall name="Terracotta Wall">
+            <tile id="86"  type="top_border" />
+            <tile id="85"  type="left_top" />
             <tile id="86"  type="top" />
+            <tile id="87"  type="right_top" />
+            <tile id="102" type="left_bottom" />
             <tile id="103" type="bottom" />
+            <tile id="104" type="right_bottom" />
         </wall>
         <wall name="Mustard Wall">
+            <tile id="120" type="top_border" />
+            <tile id="119" type="left_top" />
             <tile id="120" type="top" />
+            <tile id="121" type="right_top" />
+            <tile id="136" type="left_bottom" />
             <tile id="137" type="bottom" />
+            <tile id="138" type="right_bottom" />
         </wall>
         <wall name="Mint Wall">
+            <tile id="154" type="top_border" />
+            <tile id="153" type="left_top" />
             <tile id="154" type="top" />
+            <tile id="155" type="right_top" />
+            <tile id="170" type="left_bottom" />
             <tile id="171" type="bottom" />
+            <tile id="172" type="right_bottom" />
         </wall>
         <wall name="Oak Wood Panel Wall">
+            <tile id="188" type="top_border" />
+            <tile id="187" type="left_top" />
             <tile id="188" type="top" />
+            <tile id="189" type="right_top" />
+            <tile id="204" type="left_bottom" />
             <tile id="205" type="bottom" />
+            <tile id="206" type="right_bottom" />
         </wall>
         <wall name="Taupe Wood Panel Wall">
+            <tile id="222" type="top_border" />
+            <tile id="221" type="left_top" />
             <tile id="222" type="top" />
+            <tile id="223" type="right_top" />
+            <tile id="238" type="left_bottom" />
             <tile id="239" type="bottom" />
+            <tile id="240" type="right_bottom" />
         </wall>
         <wall name="Mahogany Wood Panel Wall">
+            <tile id="256" type="top_border" />
+            <tile id="255" type="left_top" />
             <tile id="256" type="top" />
+            <tile id="257" type="right_top" />
+            <tile id="272" type="left_bottom" />
             <tile id="273" type="bottom" />
+            <tile id="274" type="right_bottom" />
         </wall>
         <wall name="Slate Blue-Grey Wall">
+            <tile id="290" type="top_border" />
+            <tile id="289" type="left_top" />
             <tile id="290" type="top" />
+            <tile id="291" type="right_top" />
+            <tile id="306" type="left_bottom" />
             <tile id="307" type="bottom" />
+            <tile id="308" type="right_bottom" />
         </wall>
         <wall name="Olive-Grey Wall">
+            <tile id="324" type="top_border" />
+            <tile id="323" type="left_top" />
             <tile id="324" type="top" />
+            <tile id="325" type="right_top" />
+            <tile id="340" type="left_bottom" />
             <tile id="341" type="bottom" />
+            <tile id="342" type="right_bottom" />
         </wall>
     </walls>
 </tiles>

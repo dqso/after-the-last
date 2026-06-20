@@ -18,7 +18,7 @@ import (
 
 const (
 	tileSize          = 16
-	playerCollisionRX = tileSize / 2
+	playerCollisionRX = tileSize / 3
 	playerCollisionRY = 2.5
 )
 
@@ -82,7 +82,7 @@ func NewGame(screenWidth, screenHeight int) *Game {
 	player := NewPlayer(tilesetCharacterList, playerCollisionRX, playerCollisionRY)
 
 	//floorGrid, wallsGrid, itemsGrid, collisionGrid := generator.GenerateV0()
-	floorGrid, wallsGrid, itemsGrid, collisionGrid := generator.GenerateV1(time.Now().UnixNano())
+	floorGrid, wallsGrid, itemsGrid, collisionGrid := generator.GenerateV2(time.Now().UnixNano())
 	w := NewWorld(tilesetList, floorGrid, wallsGrid, itemsGrid, collisionGrid, player)
 
 	col, row, ok := w.FindFreeCell(rand.New(rand.NewSource(0)))
