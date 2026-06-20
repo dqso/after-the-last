@@ -23,6 +23,7 @@ const (
 )
 
 type Game struct {
+	version      string
 	screenWidth  int
 	screenHeight int
 	camera       *Camera
@@ -34,7 +35,7 @@ type Game struct {
 	lastDraw     time.Time
 }
 
-func NewGame(screenWidth, screenHeight int) *Game {
+func NewGame(version string, screenWidth, screenHeight int) *Game {
 	tilesetList := tileset.NewTileSetList()
 	roomTS, err := tileset.NewTileSet(assets.RoomBuilderSheet, tileSize, tileSize)
 	if err != nil {
@@ -103,6 +104,7 @@ func NewGame(screenWidth, screenHeight int) *Game {
 	}
 
 	return &Game{
+		version:      version,
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 		camera:       NewCamera(),
@@ -176,6 +178,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		p.Memory, forgetStr,
 	)
 	ebitenutil.DebugPrint(screen, info)
+
+	const glyphW = 6
+	ebitenutil.DebugPrintAt(screen, g.version, sw-len(g.version)*glyphW-3, 0)
 }
 
 // drawWorldAxes draws X/Y axes intersecting at world origin (0,0).
