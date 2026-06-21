@@ -40,6 +40,10 @@ type World struct {
 	// the memory layer (set on tile changes). Avoids redrawing a large, mostly
 	// static map every frame.
 	colorDirty bool
+
+	// collisionTex is a cached world-pixel texture of sight blockers, built once
+	// from the (static) collision data. See CollisionImage.
+	collisionTex *ebiten.Image
 }
 
 func NewWorld(ts tilesetListProvider, floor, walls [][]int, items [][]int, collision [][]collision.Type, player *Player) *World {
@@ -80,6 +84,51 @@ func (w *World) Player() *Player { return w.player }
 func (w *World) WorldPixelSize() (int, int) {
 	return w.cols * w.tiles.TileW(), w.rows * w.tiles.TileH()
 }
+
+// CollisionImage returns a world-pixel-sized texture holding two sight layers,
+// sampled by the visibility pass:
+//
+//	R = collision layer  — 1 where the pixel is impassable by collision.
+//	G = wall layer       — 1 where the pixel's tile holds a wall tile.
+//
+// The ray stops at the collision layer, but a wall pixel stays visible (its face
+// is drawn): the visibility pass tests the collision layer only up to just before
+// a wall pixel, so the player sees wall surfaces without peeking through them into
+// the room beyond. The resolution is 1:1 with world pixels so obstacles of any
+// shape occlude exactly per pixel.
+//
+// Built once and cached: the layers are static after world generation. If dynamic
+// blockers are added later, invalidate w.collisionTex when they move.
+func (w *World) CollisionImage() *ebiten.Image {
+	if w.collisionTex != nil {
+		return w.collisionTex
+	}
+	tw, th := w.tiles.TileW(), w.tiles.TileH()
+	pw, ph := w.WorldPixelSize()
+	img := ebiten.NewImage(pw, ph)
+	buf := make([]byte, pw*ph*4)
+	for py := 0; py < ph; py++ {
+		row := py / th
+		for px := 0; px < pw; px++ {
+			i := (py*pw + px) * 4
+			buf[i+3] = 0xff // opaque, so the channels survive alpha premultiplication
+			if w.CollidesAt(float64(px)+0.5, float64(py)+0.5) {
+				buf[i] = 0xff // R: collision layer
+			}
+			col := px / tw
+			if row >= 0 && row < len(w.walls) && col >= 0 && col < len(w.walls[row]) &&
+				w.walls[row][col] != emptyTile {
+				buf[i+1] = 0xff // G: wall layer
+			}
+		}
+	}
+	img.WritePixels(buf)
+	w.collisionTex = img
+	return w.collisionTex
+}
+
+// emptyTile marks an empty cell in the floor/walls/items grids.
+const emptyTile = -1
 
 // updateButtons advances each button's tick and toggles its tile ID every second.
 func (w *World) updateButtons() {

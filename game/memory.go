@@ -101,16 +101,15 @@ func NewMemoryLayer(worldPixW, worldPixH int) (*MemoryLayer, error) {
 // Update runs the memory shader: inside the FOV cone it refreshes stored colors
 // to the live world snapshot and strengthens memory; outside it freezes the
 // colors and decays memory. worldColor is a 1:1 world-pixel snapshot of the
-// current world (same size as the memory buffers). eyeWX/eyeWY are world-pixel
-// coordinates; dt is seconds; memoryStat is the player's [0,100] memory stat
-// controlling forgetting speed; screenW/screenH bound the update to the visible area.
-func (m *MemoryLayer) Update(worldColor *ebiten.Image, eyeWX, eyeWY, dirAngle, dt, memoryStat float64, screenW, screenH int) {
+// current world (same size as the memory buffers). losTex is the world-pixel
+// line-of-sight mask (image2) from the visibility pass: the shader multiplies the
+// cone by it so areas hidden behind walls (or out of range) are not learned.
+// eyeWX/eyeWY are world-pixel coordinates; dt is seconds; memoryStat is the
+// player's [0,100] memory stat controlling forgetting speed.
+func (m *MemoryLayer) Update(worldColor, losTex *ebiten.Image, eyeWX, eyeWY, dirAngle, dt, memoryStat float64) {
 	src := m.bufs[m.cur]
 	dst := m.bufs[1-m.cur]
 	w, h := dst.Bounds().Dx(), dst.Bounds().Dy()
-
-	// Limit memory updates to the screen-diagonal radius in world pixels.
-	maxViewRadius := math.Sqrt(float64(screenW*screenW+screenH*screenH)) / (2.0 * Scale)
 
 	// Strength lost this frame. Accumulate fractional decay and only emit it in
 	// whole alpha-quantum steps; otherwise a sub-quantum delta rounds away when
@@ -134,13 +133,13 @@ func (m *MemoryLayer) Update(worldColor *ebiten.Image, eyeWX, eyeWY, dirAngle, d
 	opts.Blend = ebiten.BlendCopy
 	opts.Images[0] = src        // previous memory (frozen color + strength)
 	opts.Images[1] = worldColor // live world color snapshot
+	opts.Images[2] = losTex     // line-of-sight mask
 	opts.Uniforms = map[string]any{
 		"EyeWorldPos":       []float32{float32(eyeWX), float32(eyeWY)},
 		"DirAngle":          float32(dirAngle),
 		"FOVHalfAngle":      float32(fovHalfAngle),
 		"DecayDelta":        float32(decayDelta),
 		"FadeInDelta":       float32(memoryFadeInRate * dt),
-		"MaxViewRadius":     float32(maxViewRadius),
 		"MemoryMaxStrength": float32(1.0 - memoryInitialDim),
 	}
 	dst.DrawRectShader(w, h, m.shader, opts)
@@ -154,12 +153,5 @@ func (m *MemoryLayer) Image() *ebiten.Image { return m.bufs[m.cur] }
 // using the camera transform so it aligns with the rendered world. BlendCopy
 // preserves the raw RGBA (straight color + strength) for the FOV shader.
 func (m *MemoryLayer) DrawToScreen(dst *ebiten.Image, cam *Camera, screenW, screenH int) {
-	dst.Clear()
-	hw := float64(screenW) / 2
-	hh := float64(screenH) / 2
-	op := &ebiten.DrawImageOptions{}
-	op.Blend = ebiten.BlendCopy
-	op.GeoM.Scale(Scale, Scale)
-	op.GeoM.Translate(-cam.X*Scale+hw, -cam.Y*Scale+hh)
-	dst.DrawImage(m.Image(), op)
+	projectWorldToScreen(dst, m.Image(), cam, screenW, screenH)
 }

@@ -23,16 +23,19 @@ const (
 )
 
 type Game struct {
-	version      string
-	screenWidth  int
-	screenHeight int
-	camera       *Camera
-	world        *World
-	fov          *FOVRenderer
-	memory       *MemoryLayer
-	worldColor   *ebiten.Image // world-pixel snapshot of the live world for the memory layer
-	memoryScreen *ebiten.Image // screen-sized projection of memory for the FOV shader
-	lastDraw     time.Time
+	version          string
+	screenWidth      int
+	screenHeight     int
+	camera           *Camera
+	world            *World
+	fov              *FOVRenderer
+	memory           *MemoryLayer
+	visibility       *VisibilityRenderer
+	worldColor       *ebiten.Image // world-pixel snapshot of the live world for the memory layer
+	visibilityWorld  *ebiten.Image // world-pixel line-of-sight mask (visibility pass output)
+	memoryScreen     *ebiten.Image // screen-sized projection of memory for the FOV shader
+	visibilityScreen *ebiten.Image // screen-sized projection of the line-of-sight mask
+	lastDraw         time.Time
 }
 
 func NewGame(version string, screenWidth, screenHeight int) *Game {
@@ -103,15 +106,22 @@ func NewGame(version string, screenWidth, screenHeight int) *Game {
 		log.Fatal(err)
 	}
 
+	vis, err := NewVisibilityRenderer()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &Game{
-		version:      version,
-		screenWidth:  screenWidth,
-		screenHeight: screenHeight,
-		camera:       NewCamera(),
-		world:        w,
-		fov:          fov,
-		memory:       mem,
-		worldColor:   ebiten.NewImage(worldPixW, worldPixH),
+		version:         version,
+		screenWidth:     screenWidth,
+		screenHeight:    screenHeight,
+		camera:          NewCamera(),
+		world:           w,
+		fov:             fov,
+		memory:          mem,
+		visibility:      vis,
+		worldColor:      ebiten.NewImage(worldPixW, worldPixH),
+		visibilityWorld: ebiten.NewImage(worldPixW, worldPixH),
 	}
 }
 
@@ -141,9 +151,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	sw, sh := g.screenWidth, g.screenHeight
 
-	// Recreate the screen-sized memory proxy if dimensions changed.
+	// Recreate the screen-sized proxies if dimensions changed.
 	if g.memoryScreen == nil || g.memoryScreen.Bounds().Dx() != sw || g.memoryScreen.Bounds().Dy() != sh {
 		g.memoryScreen = ebiten.NewImage(sw, sh)
+		g.visibilityScreen = ebiten.NewImage(sw, sh)
 	}
 
 	g.world.Draw(screen, g.camera, sw, sh)
@@ -158,9 +169,26 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	eyeWX, eyeWY := p.EyeWorldPos()
 	eyeSX, eyeSY := g.camera.WorldToScreen(eyeWX, eyeWY, sw, sh)
 
-	g.memory.Update(g.worldColor, eyeWX, eyeWY, p.DirAngle(), dt, p.Memory, sw, sh)
+	// Single ray-march pass: build the world-space line-of-sight mask from the
+	// cached collision texture. Memory reads it directly; FOV reads its screen
+	// projection. Both apply the cheap directional cone themselves.
+	collisionTex := g.world.CollisionImage()
+	g.visibility.Draw(g.visibilityWorld, collisionTex, eyeWX, eyeWY, sw, sh)
+	projectWorldToScreen(g.visibilityScreen, g.visibilityWorld, g.camera, sw, sh)
+
+	g.memory.Update(g.worldColor, g.visibilityWorld, eyeWX, eyeWY, p.DirAngle(), dt, p.Memory)
 	g.memory.DrawToScreen(g.memoryScreen, g.camera, sw, sh)
-	g.fov.Draw(screen, g.memoryScreen, eyeSX, eyeSY, p.DirAngle())
+	g.fov.Draw(screen, g.memoryScreen, g.visibilityScreen, eyeSX, eyeSY, p.DirAngle(), sw, sh)
+
+	// DEBUG (hold B): tint sight blockers (blocksSightAt → CollisionImage) red over
+	// the world. Additive blend so the black floor adds nothing and only walls glow.
+	if ebiten.IsKeyPressed(ebiten.KeyB) {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(Scale, Scale)
+		op.GeoM.Translate(-g.camera.X*Scale+float64(sw)/2, -g.camera.Y*Scale+float64(sh)/2)
+		op.Blend = ebiten.BlendLighter
+		screen.DrawImage(collisionTex, op)
+	}
 
 	//g.drawWorldAxes(screen)
 

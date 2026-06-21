@@ -27,3 +27,6 @@ var FOVShader []byte
 
 //go:embed "memory_update.kage"
 var MemoryUpdateShader []byte
+
+//go:embed "visibility.kage"
+var VisibilityShader []byte

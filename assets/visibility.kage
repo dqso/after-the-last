@@ -1,0 +1,78 @@
+//kage:unit pixels
+
+package main
+
+// EyeWorldPos is the player's eye position in world-pixel coordinates.
+var EyeWorldPos vec2
+
+// MaxViewRadius limits visibility to the player's screen-visible range (world pixels).
+var MaxViewRadius float
+
+// traceOccluded marches the segment from eye to pixel (world pixels) and returns
+// 1.0 if the line of sight is blocked. A pixel blocks when it is NOT a wall and is
+// either solid void (collision, image0 R) OR lies beyond a wall the ray already
+// passed through (image0 G seen earlier along the ray). Wall pixels themselves stay
+// visible and transparent to the ray, so a wall of any thickness is seen in full,
+// but anything past where the wall ends — void or open floor of the next room —
+// is hidden. Kept as a function on purpose: the same loop inlined into Fragment
+// miscompiles under kage. Sampling is anchored on srcPos and offset RELATIVELY by
+// (rayPos - pixelPos); the atlas origin is already carried by srcPos.
+// maxWallDepth caps how deep (world pixels) the ray may travel through wall tiles
+// before it stops. ~3 tiles, so the third wall is fully visible and anything past
+// it is hidden.
+const maxWallDepth = 48.0
+
+func traceOccluded(srcPos vec2, pixelPos vec2, eye vec2) float {
+	d := pixelPos - eye
+	dist := length(d)
+	dir := d / max(dist, 0.0001)
+
+	// Small step keeps the wall/void boundary crisp (a coarse step would let a few
+	// pixels past the wall stay lit). maxSteps*stepLen caps the trace range.
+	const stepLen = 2.0
+	const maxSteps = 320
+	hit := 0.0
+	enteredWall := 0.0 // 1 once the ray has crossed a wall pixel
+	wallDepth := 0.0   // world-px traveled through wall tiles so far
+	for i := 0; i < maxSteps; i++ {
+		t := stepLen * (float(i) + 0.5)
+		onSegment := step(t, dist) // 1 while t <= dist, 0 once we pass the pixel
+		rayPos := eye + dir*min(t, dist)
+		c := imageSrc0At(srcPos + (rayPos - pixelPos))
+
+		// A non-wall pixel blocks if it is collision void OR sits beyond a wall the
+		// ray already entered. enteredWall/wallDepth are read BEFORE this step's
+		// update, so the current wall pixel itself never counts as "beyond".
+		blocker := (1.0 - c.g) * max(c.r, enteredWall)
+		// Too much wall traversed: shade the wall from this depth on.
+		deep := step(maxWallDepth, wallDepth)
+		hit = max(hit, max(blocker, deep)*onSegment)
+
+		enteredWall = max(enteredWall, c.g*onSegment)
+		wallDepth = wallDepth + c.g*stepLen*onSegment
+	}
+	return step(0.5, hit)
+}
+
+// Fragment outputs the line-of-sight mask in world space:
+//   R = 1 where a straight ray from the eye reaches this pixel within range
+//       (no wall in between), 0 otherwise.
+// The directional cone is applied later by the FOV/memory passes; this pass only
+// handles the expensive ray march, so it runs once instead of per consumer.
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	// dstPos carries the destination atlas offset; subtract it for world-pixel coords.
+	worldPos := dstPos.xy - imageDstOrigin()
+	dx := worldPos.x - EyeWorldPos.x
+	dy := worldPos.y - EyeWorldPos.y
+
+	dist := sqrt(dx*dx + dy*dy)
+	inRange := 1.0 - smoothstep(MaxViewRadius*0.85, MaxViewRadius, dist)
+
+	occluded := traceOccluded(srcPos, worldPos, EyeWorldPos)
+
+	// visible = inRange*(1-occluded). occluded appears only in a PRODUCT (never
+	// `1-occluded`): subtracting the trace result directly corrupts it under kage.
+	visible := inRange - inRange*occluded
+
+	return vec4(visible, 0.0, 0.0, 1.0)
+}

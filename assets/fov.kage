@@ -12,12 +12,16 @@ var DirAngle float
 var FOVHalfAngle float
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
-	// Image0 is the memory layer projected to screen space:
-	//   rgb = frozen world color, a = memory strength (0–1).
+	// Image0: memory layer projected to screen (rgb = frozen color, a = strength).
+	// Image1: line-of-sight mask projected to screen (r = reachable from the eye).
 	mem := imageSrc0At(srcPos)
+	los := imageSrc1At(srcPos).r
 
-	dx := dstPos.x - PlayerScreenPos.x
-	dy := dstPos.y - PlayerScreenPos.y
+	// Directional cone (cheap, computed locally). The expensive wall ray march is
+	// already baked into the los mask, so no tracing happens here.
+	local := dstPos.xy - imageDstOrigin()
+	dx := local.x - PlayerScreenPos.x
+	dy := local.y - PlayerScreenPos.y
 	pixelAngle := atan2(dy, dx)
 	diff := pixelAngle - DirAngle
 	const pi = 3.14159265358979
@@ -25,12 +29,14 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	absDiff := abs(diff)
 
 	const edgeSoft = 0.087
-	inCone := 1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)
+	coneRaw := 1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)
 
-	// Outside the cone, cover the live world with the remembered snapshot,
-	// fading toward black as memory strength decays. Inside the cone, output
-	// nothing (alpha 0) so the live world shows through.
-	cover := 1.0 - inCone
+	// Visible = inside the cone AND reachable (not behind a wall, within range).
+	cover := 1.0 - coneRaw*los
+
+	// Outside the visible area, cover the live world with the remembered snapshot,
+	// fading toward black as memory strength decays. Inside it, cover is 0 so the
+	// live world shows through.
 	rememberedColor := mem.rgb * mem.a // straight color dimmed by strength
 
 	// Premultiplied output for source-over blending onto the live screen.

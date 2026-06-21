@@ -17,9 +17,6 @@ var DecayDelta float
 // FadeInDelta is the memory strength gained this frame for in-FOV pixels.
 var FadeInDelta float
 
-// MaxViewRadius limits memory updates to pixels within the screen-visible range (world pixels).
-var MaxViewRadius float
-
 // MemoryMaxStrength caps the strength of out-of-FOV pixels. A pixel is at full
 // strength (1.0) only while inside the cone; the moment it leaves, its strength
 // is clamped to this value, producing an instant darkening step before the slow
@@ -35,18 +32,14 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	// region internally — so sample with the raw srcPos, never re-add origins.
 	fresh := imageSrc1At(srcPos).rgb
 
-	// dstPos carries the destination image's atlas offset. Subtract the origin
-	// to get local (world-pixel) coordinates; otherwise the ping-pong buffers,
-	// which sit at different atlas offsets, would write the cone at two shifted
-	// world positions on alternating frames (a ghost second cone that never decays).
+	// image2: line-of-sight mask (r = reachable from the eye, not behind a wall,
+	// within range). The expensive ray march is done once in the visibility pass.
+	los := imageSrc2At(srcPos).r
+
+	// Directional cone (cheap, computed locally in world space).
 	worldPos := dstPos.xy - imageDstOrigin()
 	dx := worldPos.x - EyeWorldPos.x
 	dy := worldPos.y - EyeWorldPos.y
-
-	// No memory update beyond the player's screen-visible range.
-	dist := sqrt(dx*dx + dy*dy)
-	inRange := 1.0 - smoothstep(MaxViewRadius*0.85, MaxViewRadius, dist)
-
 	pixelAngle := atan2(dy, dx)
 	diff := pixelAngle - DirAngle
 	const pi = 3.14159265358979
@@ -54,7 +47,10 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	absDiff := abs(diff)
 
 	const edgeSoft = 0.087
-	inCone := (1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)) * inRange
+	coneRaw := 1.0 - smoothstep(FOVHalfAngle-edgeSoft, FOVHalfAngle+edgeSoft, absDiff)
+
+	// Learn only what the player actually sees: inside the cone AND reachable.
+	inCone := coneRaw * los
 
 	// Strength: gained inside the cone, decayed outside. Out-of-cone strength is
 	// clamped to MemoryMaxStrength, so a pixel just leaving the cone drops from
